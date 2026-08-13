@@ -1,0 +1,37 @@
+# Reference / documentation copy of default settings.
+# The application itself is configured exclusively via environment
+# variables (see .env.example) - this file is not read by the app at
+# runtime. It exists so the "shape" of configuration is easy to review
+# without digging through code, and as a starting point if you later want
+# to add YAML-based config loading.
+
+app:
+  env: development
+  host: 0.0.0.0
+  port: 8000
+  log_level: INFO
+
+database:
+  url: sqlite:///./avaas.db
+
+llm:
+  provider: mock   # mock | ollama | gemini
+  ollama:
+    base_url: http://localhost:11434
+    model: llama3
+  gemini:
+    model: gemini-1.5-flash
+
+execution:
+  request_timeout_seconds: 15
+  max_concurrency: 8
+
+evaluation:
+  pass_score_threshold: 70
+  composite_rule_weight: 0.6
+  composite_llm_weight: 0.4
+  llm_judge_fallback_heuristic: true
+
+regression:
+  score_drop_threshold: 10
+  pass_rate_drop_threshold: 0.1
