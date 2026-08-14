@@ -1,0 +1,47 @@
+.env
+.venv
+.venv/
+venv/
+venv
+
+__pycache__
+
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Python Virtual Environments
+venv/
+env/
+.venv/
+.env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment Variables (Keep secrets out of GitHub)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build directories & logs
+dist/
+build/
+logs/
+*.log
+
+# OS & Editor Files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# SQLite Databases
+avaas.db
+*.sqlite3
+*.db
