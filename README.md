@@ -167,7 +167,7 @@ Selection order is Langfuse, then OpenTelemetry, then LangSmith, then local pers
 ## Start backend
 
 ```powershell
-cd avaas-enterprise-v3\backend
+cd avass-enterprise-v3\backend
 .\.venv\Scripts\Activate.ps1
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
