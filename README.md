@@ -37,7 +37,7 @@ npm --version
 ## Backend installation
 
 ```powershell
-cd avaas-shreesanyog\backend
+cd avass-shreesanyog\backend
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip setuptools wheel
