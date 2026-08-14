@@ -72,7 +72,7 @@ function App() {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [mode, setMode] = useState('browser');
-  const [customConfig, setCustomConfig] = useState(''); // NEW: Holds custom CSS selectors
+  const [customConfig, setCustomConfig] = useState('');
   const [msg, setMsg] = useState('');
 
   async function load() {
@@ -107,14 +107,9 @@ function App() {
   async function add() {
     let parsedConfig = {};
     if (customConfig.trim()) {
-      try {
-        parsedConfig = JSON.parse(customConfig);
-      } catch (e) {
-        Swal.fire({ icon: 'error', title: 'Invalid JSON', text: 'Please ensure your Advanced Config is valid JSON format.', background: '#0f172a', color: '#f8fafc' });
-        return;
-      }
+      try { parsedConfig = JSON.parse(customConfig); } 
+      catch (e) { Swal.fire({ icon: 'error', title: 'Invalid JSON', text: 'Please ensure your Advanced Config is valid JSON format.', background: '#0f172a', color: '#f8fafc' }); return; }
     }
-
     const t = await api(`/projects/${pid}/targets`, { method: 'POST', body: JSON.stringify({ name: name || new URL(url).hostname, base_url: url, mode, config: parsedConfig }) });
     setMsg('Target saved. Running discovery...');
     const d = await api(`/targets/${t.id}/discover`, { method: 'POST' });
@@ -180,7 +175,6 @@ function App() {
               <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://agent.example.com" />
             </div>
             
-            {/* NEW ADVANCED CONFIG TEXTAREA */}
             <div className="mt-4">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Advanced Config (JSON) - Optional</label>
               <textarea 
@@ -230,7 +224,6 @@ function App() {
           </div>
         </section>
 
-        {/* --- DETAILED LIVE RUN ANALYSIS --- */}
         <section className="mt-6 card">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Activity className="text-violet-400" size={20} /> Recent Test Analysis & Results
@@ -250,7 +243,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-6">
+                <div className="grid grid-cols-5 gap-6">
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Release Gate</p>
                     <p className={`text-xl font-black ${r.release_gate === 'PASS' ? 'text-emerald-400' : 'text-rose-500'}`}>
@@ -265,9 +258,13 @@ function App() {
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Pass Rate</p>
                     <p className="text-lg font-bold text-slate-200">{r.pass_rate ? (r.pass_rate * 100).toFixed(0) : 0}%</p>
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">LLM Engine</p>
-                    <p className="text-sm font-medium text-slate-300 mt-1 uppercase">{r.summary?.llm_provider || 'Evaluating...'}</p>
+                  <div className="col-span-2">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">QA Telemetry</p>
+                    <div className="text-xs text-slate-300 font-mono mt-1 space-y-1">
+                      <p>Engine: <span className="text-violet-300 uppercase font-bold">{r.summary?.llm_provider || 'Evaluating...'}</span></p>
+                      <p>Tokens Used: {r.summary?.tokens ? (r.summary.tokens.prompt + r.summary.tokens.completion).toLocaleString() : 0}</p>
+                      <p>Est. Cost: <span className="text-emerald-400">${r.summary?.estimated_cost ? r.summary.estimated_cost.toFixed(5) : '0.00000'}</span></p>
+                    </div>
                   </div>
                 </div>
 
@@ -283,7 +280,14 @@ function App() {
                     {runDetails[r.id].map((res: any) => (
                       <div key={res.id} className="bg-slate-950 p-4 rounded-lg border border-slate-800">
                         <div className="flex justify-between items-center mb-3">
-                          <span className="px-2 py-1 bg-slate-800 text-slate-300 text-[10px] font-bold uppercase rounded">{res.case_type} Case</span>
+                          <div>
+                            <span className="px-2 py-1 bg-slate-800 text-slate-300 text-[10px] font-bold uppercase rounded">{res.case_type} Case</span>
+                            {res.evidence?.hallucination_detected && (
+                              <span className="ml-2 px-2 py-1 bg-rose-500/20 text-rose-400 text-[10px] font-bold uppercase rounded border border-rose-500/30">
+                                ⚠️ Hallucination Detected
+                              </span>
+                            )}
+                          </div>
                           <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded ${res.passed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
                             {res.passed ? 'PASSED' : 'FAILED'}
                           </span>
@@ -292,7 +296,7 @@ function App() {
                         <div className="mb-3"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Agent Response / Error Output</span><p className={`text-sm font-mono bg-slate-900/50 p-2 rounded ${!res.response || res.response.includes('Error') || res.response.includes('crashed') ? 'text-rose-400' : 'text-slate-300'}`}>{res.response || "No response received or adapter crashed."}</p></div>
                         <div className="grid grid-cols-2 gap-4 border-t border-slate-800 pt-3 mt-3">
                           <div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">LLM Judge Rationale</span><ul className="text-xs text-slate-400 list-disc pl-4">{res.rationale && res.rationale.length > 0 ? res.rationale.map((r: string, idx: number) => <li key={idx}>{r}</li>) : <li>No rationale provided.</li>}</ul></div>
-                          <div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Trace Evidence</span><div className="text-xs text-slate-400 font-mono">Latency: {res.evidence?.latency_ms ? res.evidence.latency_ms.toFixed(0) : 0}ms <br/>Adapter: {res.evidence?.adapter || 'N/A'} <br/>Page Errors: {res.evidence?.page_errors?.length || 0} caught</div></div>
+                          <div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Trace Evidence</span><div className="text-xs text-slate-400 font-mono">Latency: {res.evidence?.latency_ms ? res.evidence.latency_ms.toFixed(0) : 0}ms <br/>Adapter: {res.evidence?.adapter || 'N/A'} <br/>Tokens Used: {res.evidence?.tokens ? (res.evidence.tokens.prompt + res.evidence.tokens.completion).toLocaleString() : 0}</div></div>
                         </div>
                       </div>
                     ))}
