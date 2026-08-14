@@ -1,7 +1,6 @@
 # AVaaS Enterprise V3 — No Docker
 
-Production-style, multi-tenant Agent Validator as a Service aligned with the included TechCon 2026 proposal. The proposal is preserved at `docs/TechCon_2026_AVaaS_Proposal.pdf` for hackathon review.
-
+Production-style, multi-tenant Agent Validator as a Service aligned with the included TechCon 2026 proposal. 
 ## What is implemented
 
 - React + TypeScript + Tailwind CSS 3 dashboard.
@@ -17,9 +16,6 @@ Production-style, multi-tenant Agent Validator as a Service aligned with the inc
 - Baseline/candidate data model and release-gate outputs.
 - SQLite local default; PostgreSQL recommended for production.
 
-## Configuration policy
-
-`app/core/config.py` contains **no deployment URL, model, secret, database URL, timeout, or provider default**. All values must come from `backend/.env` locally or the deployment platform's environment/secret manager. `.env.example` contains non-secret examples only. Never commit `.env`.
 
 ## Prerequisites
 
@@ -41,7 +37,7 @@ npm --version
 ## Backend installation
 
 ```powershell
-cd avaas-enterprise-v3\backend
+cd avaas-shreesanyog\backend
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip setuptools wheel
