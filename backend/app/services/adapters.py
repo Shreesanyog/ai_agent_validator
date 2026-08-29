@@ -90,7 +90,7 @@ class RestAdapter:
             if last_exc:
                 raise last_exc
 
-        async with httpx.AsyncClient(timeout=cfg.get('timeout', 60), follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=cfg.get('timeout', 150), follow_redirects=True) as client:
             for turn in turns:
                 body = dict(cfg.get('body_template') or {})
                 body[prompt_field] = turn
@@ -127,6 +127,25 @@ class RestAdapter:
     async def invoke(self, target, prompt):
         return await self.invoke_case(target, {'prompt': prompt})
 
+async def _bypass_turnstile_if_present(page):
+    """Detects and clicks Cloudflare Turnstile/Datadome checkbox if encountered."""
+    try:
+        for frame in page.frames:
+            if "challenges.cloudflare.com" in frame.url or "turnstile" in frame.url:
+                checkbox = frame.locator("input[type='checkbox'], .cb-i, #challenge-stage")
+                if await checkbox.count():
+                    await checkbox.first.click(delay=100)
+                    await page.wait_for_timeout(3000)
+                    return True
+        cf_button = page.locator("#cf-stage, #challenge-running, input[value='Verify you are human']")
+        if await cf_button.count():
+            await cf_button.first.click(delay=100)
+            await page.wait_for_timeout(3000)
+            return True
+    except Exception:
+        pass
+    return False
+
 class BrowserAdapter:
     async def invoke_case(self, target, case):
         await guard_url(target.base_url)
@@ -140,9 +159,11 @@ class BrowserAdapter:
         start = time.perf_counter()
         transcript = []
         last_text = ''
+        
+        # Override global default to 150 seconds to prevent deep research crashes
+        global_timeout = cfg.get('timeout', 150000)
 
         async with async_playwright() as p:
-            # Stealth and anti-bot launch params
             b = await p.chromium.launch(
                 headless=settings().browser_headless,
                 args=["--disable-blink-features=AutomationControlled"]
@@ -151,15 +172,21 @@ class BrowserAdapter:
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1280, "height": 800}
             )
+            context.set_default_timeout(global_timeout)
+            
             page = await context.new_page()
             await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
             errs = []
             page.on('pageerror', lambda e: errs.append(str(e)))
-            await page.goto(target.base_url, wait_until='domcontentloaded', timeout=settings().browser_timeout_ms)
+            
+            await page.goto(target.base_url, wait_until='domcontentloaded')
+            
+            # Catch the Mindtrip/Cloudflare tick box
+            await _bypass_turnstile_if_present(page)
 
             try:
-                await page.locator(inp).first.wait_for(state='visible', timeout=15000)
+                await page.locator(inp).first.wait_for(state='visible', timeout=30000)
             except Exception:
                 await b.close()
                 raise RuntimeError(f'Input {inp} not found. Is the page still loading or blocking bots?')
@@ -168,28 +195,52 @@ class BrowserAdapter:
                 before = await page.locator(response).last.inner_text() if await page.locator(response).count() else ''
                 box = page.locator(inp).first
                 
-                # HUMAN TYPING FIX: Clears the box, then types bit by bit
-                await box.fill('')
+                # BUG FIX: Playwright fill() auto-waits for editability. We just wait for visibility.
+                await box.wait_for(state='visible', timeout=global_timeout)
+                
+                await box.fill('', timeout=global_timeout)
                 await box.focus()
-                await box.press_sequentially(turn, delay=65) 
+                await box.press_sequentially(turn, delay=45) 
                 
                 if submit and await page.locator(submit).count():
                     await page.locator(submit).last.click()
                 else:
                     await box.press('Enter')
                 
-                try:
-                    await page.wait_for_function(
-                        '(x)=>{const e=document.querySelector(x.s);return e && e.innerText.trim()!==x.b.trim()}',
-                        arg={'s': response, 'b': before}, timeout=45000)
-                    # Give it a tiny bit extra to finish streaming
-                    await page.wait_for_timeout(1000) 
-                except Exception:
-                    await page.wait_for_timeout(5000)
+                # --- DYNAMIC STREAM STABILIZATION ENGINE ---
+                poll_start = time.time()
+                current_text = ""
+                stable_cycles = 0
                 
-                after = await page.locator(response).last.inner_text() if await page.locator(response).count() else await page.locator('body').inner_text()
+                # Base wait: 8 seconds of absolute silence before assuming standard agent is done
+                base_stable_threshold = cfg.get('stable_seconds', 8)
+
+                while time.time() - poll_start < (global_timeout / 1000):
+                    await page.wait_for_timeout(1000)
+                    if await page.locator(response).count():
+                        new_text = await page.locator(response).last.inner_text()
+                    else:
+                        new_text = await page.locator('body').inner_text()
+                    
+                    # DYNAMIC OVERRIDE: If it's a deep research agent that says "wait" or "executing", 
+                    # grant it up to 60 seconds of absolute silence before timing out.
+                    current_threshold = base_stable_threshold
+                    lower_text = new_text.lower()
+                    if any(kw in lower_text for kw in ['wait', 'executing', 'analyzing', 'researching', 'scanning', 'synthesizing', 'progress']):
+                        current_threshold = 60
+                        
+                    if len(new_text.strip()) > len(before.strip()):
+                        if new_text.strip() == current_text.strip():
+                            stable_cycles += 1
+                            if stable_cycles >= current_threshold:  
+                                break
+                        else:
+                            current_text = new_text
+                            stable_cycles = 0
+                
+                after = current_text if current_text else (await page.locator('body').inner_text())
                 last_text = after[len(before):].strip() if after.startswith(before) else after.strip()
-                transcript.append({'user': turn, 'agent': last_text[:2000]})
+                transcript.append({'user': turn, 'agent': last_text[:4000]})
             
             await b.close()
 
