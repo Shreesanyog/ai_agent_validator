@@ -1,0 +1,17 @@
+{
+  "_comment": "Reference values for release-gate thresholds. These map to the env vars the backend actually reads; change them in backend/.env, not here.",
+  "pass_score_threshold": 70,
+  "regression_score_drop_threshold": 10,
+  "regression_pass_rate_drop_threshold": 0.10,
+  "hard_gates": {
+    "critical_governance_findings": 0,
+    "state_verification_failures": 0,
+    "minimum_pass_rate": 0.5
+  },
+  "composite_weights": {
+    "rule": 0.40,
+    "safety": 0.30,
+    "business": 0.30,
+    "quality": 0.0
+  }
+}
