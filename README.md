@@ -155,7 +155,7 @@ npm --version
 ## Backend installation
 
 ```powershell
-cd ai_agent_validator-avass-shreesanyog\backend
+cd ai_agent_validator-main\backend
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip setuptools wheel
@@ -301,7 +301,7 @@ Check:
 In a second terminal:
 
 ```powershell
-cd avaas-enterprise-v3\frontend
+cd ai_agent_validator-main\frontend
 npm install
 Copy-Item .env.example .env
 npm run dev
