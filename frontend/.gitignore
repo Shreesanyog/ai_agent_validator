@@ -1,0 +1,36 @@
+.env
+.venv
+.venv/
+venv/
+venv
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+build/
+dist/
+
+# Environment
+.env
+.env.local
+
+# Database
+*.db
+*.sqlite3
+avaas.db
+
+# Reports / artifacts
+reports/
+*.log
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Node (frontend build artifacts)
+node_modules/

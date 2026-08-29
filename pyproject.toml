@@ -1,0 +1,8 @@
+[project]
+name = "avaas"
+version = "3.0.0"
+description = "AVaaS — multi-tenant Agent Validator as a Service"
+requires-python = ">=3.12"
+
+# Backend tests are configured in backend/pytest.ini (rootdir must be backend/
+# so the `app` package is importable). Run them with: cd backend && pytest -q
