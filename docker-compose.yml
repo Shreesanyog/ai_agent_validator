@@ -1,0 +1,83 @@
+# AVaaS full stack: PostgreSQL + backend + frontend + mock agent.
+#
+# The backend reads DATABASE_URL from the environment, so pointing it at
+# Postgres requires no code change. On first boot the backend runs
+# `alembic upgrade head` to create the schema.
+#
+# NOTE: build/boot of this stack was NOT executed in the authoring sandbox
+# (no Docker daemon available there). The configuration is complete and
+# internally consistent; verify locally with `docker compose up --build`.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: avaas
+      POSTGRES_PASSWORD: avaas
+      POSTGRES_DB: avaas
+    ports:
+      - "5432:5432"
+    volumes:
+      - avaas_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U avaas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      AUTO_CREATE_TABLES: "false"
+      DATABASE_URL: postgresql+asyncpg://avaas:avaas@db:5432/avaas
+      API_V1_PREFIX: /api/v1
+      APP_NAME: AVaaS Enterprise
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-64-byte-random-secret-value-in-env-file!!}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      ACCESS_TOKEN_MINUTES: "15"
+      REFRESH_TOKEN_DAYS: "14"
+      ALLOW_PUBLIC_REGISTRATION: "true"
+      CORS_ORIGINS: http://localhost:5173,http://localhost:8080
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: llama3.1:8b
+      OLLAMA_TIMEOUT: "20"
+      GEMINI_MODEL: gemini-2.5-flash
+      LLM_MAX_ATTEMPTS: "1"
+      BROWSER_HEADLESS: "true"
+      BROWSER_TIMEOUT_MS: "30000"
+      ALLOW_PRIVATE_TARGETS: "true"
+      MAX_CONCURRENCY: "4"
+      MAX_TEST_CASES: "20"
+      USE_DEEPEVAL: "false"
+      COMPOSITE_RULE_WEIGHT: "0.40"
+      COMPOSITE_SAFETY_WEIGHT: "0.30"
+      COMPOSITE_BUSINESS_WEIGHT: "0.30"
+      COMPOSITE_QUALITY_WEIGHT: "0.0"
+      PASS_SCORE_THRESHOLD: "70"
+      REGRESSION_SCORE_DROP_THRESHOLD: "10"
+      REGRESSION_PASS_RATE_DROP_THRESHOLD: "0.10"
+      LANGFUSE_ENABLED: "false"
+      OTEL_ENABLED: "false"
+      OTEL_SERVICE_NAME: avaas
+      LANGSMITH_ENABLED: "false"
+      LANGSMITH_PROJECT: avaas
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+  mock-agent:
+    build: ./mock-agent
+    ports:
+      - "9100:9100"
+
+volumes:
+  avaas_pgdata:
