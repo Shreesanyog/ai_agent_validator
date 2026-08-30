@@ -11,6 +11,20 @@ from .discovery import guard_url
 
 COMMON_RESPONSE_KEYS = ('response', 'message', 'answer', 'output', 'text', 'reply', 'result', 'content')
 
+ERROR_TERMINAL_PATTERNS = [
+    "404 not found",
+    "traceback (most recent call last)",
+    "stexception",
+    "search failed",
+    "too many requests",
+    "rate limit",
+    "internal server error",
+    "axioserror",
+    "connection refused",
+    "exception in thread",
+    "error occurred"
+]
+
 def _auth_headers(target) -> dict:
     if not target.auth_encrypted:
         return {}
@@ -150,7 +164,7 @@ async def _bypass_turnstile_if_present(page):
         pass
     return False
 
-# Comprehensive Selector Hierarchy
+# Comprehensive Selector Hierarchy (Works for both Nexus and Streamlit apps)
 CANDIDATE_INPUT_SELECTORS = [
     "textarea[data-testid='stChatInputTextArea']",
     "div[data-testid='stChatInput'] textarea",
@@ -215,7 +229,7 @@ class BrowserAdapter:
         start = time.perf_counter()
         transcript = []
         last_text = ''
-        global_timeout = cfg.get('timeout', 180000)  # 3 minutes for multi-agent deep research pipelines
+        global_timeout = cfg.get('timeout', 180000)
 
         async with async_playwright() as p:
             b = await p.chromium.launch(
@@ -238,12 +252,12 @@ class BrowserAdapter:
             await page.wait_for_timeout(3500)
 
             for turn in turns:
-                # Dynamic re-binding per turn
                 poll_start = time.time()
                 active_input = None
                 active_root = None
                 
-                while time.time() - poll_start < 45:
+                # Dynamic re-binding per turn (Up to 30 seconds wait for Streamlit Cold-Starts)
+                while time.time() - poll_start < 30:
                     active_input, active_root = await resolve_locator(page, custom_inp, CANDIDATE_INPUT_SELECTORS, custom_iframe)
                     if not active_input:
                         try:
@@ -262,7 +276,7 @@ class BrowserAdapter:
 
                 if not active_input:
                     await b.close()
-                    raise RuntimeError("Interactive input field not found. The target system may be unresponsive or still processing a previous task.")
+                    raise RuntimeError("Interactive input field not found. The target system may be unresponsive or asleep.")
 
                 active_submit, _ = await resolve_locator(page, custom_submit, CANDIDATE_SUBMIT_SELECTORS, custom_iframe)
                 if not active_submit:
@@ -286,15 +300,14 @@ class BrowserAdapter:
                 else:
                     await active_input.press('Enter')
 
-                # --- TWO-PHASE STREAM & RESEARCH STABILIZATION ENGINE ---
+                # --- EXACT RESTORATION OF YOUR OLD WORKING LOGIC ---
                 poll_start = time.time()
                 current_text = ""
                 stable_cycles = 0
-                max_wait_secs = 180  # Up to 3 minutes for long-running deep research queries
+                max_wait_secs = 180 
 
                 while time.time() - poll_start < max_wait_secs:
                     await page.wait_for_timeout(1000)
-                    elapsed = time.time() - poll_start
                     
                     if custom_resp:
                         try:
@@ -313,47 +326,22 @@ class BrowserAdapter:
                             new_text = ""
 
                     lower_text = new_text.lower()
+                    
+                    # 1. Error fast-exit (for financial-agentt crashes)
+                    is_error_state = any(err in lower_text for err in ERROR_TERMINAL_PATTERNS)
+                    
+                    # 2. Threshold determination (exact match from your old working code)
+                    current_threshold = cfg.get('stable_seconds', 8)
+                    if is_error_state:
+                        current_threshold = 2
+                    elif any(kw in lower_text for kw in ['wait', 'executing', 'analyzing', 'researching', 'scanning', 'synthesizing', 'progress']):
+                        current_threshold = 60
 
-                    # Phase 1: Check if the system is actively in its intermediate research / WSS state
-                    is_in_deep_research = any(marker in lower_text for marker in [
-                        "executing runtime",
-                        "establishing cluster node",
-                        "establishing wss",
-                        "orchestrating strategy",
-                        "scanning global network",
-                        "harvested",
-                        "sources discovered",
-                        "ingesting raw data",
-                        "synthesizing intelligence",
-                        "faithfulness verification",
-                        "tavily search api",
-                        "please wait ~45s"
-                    ])
-
-                    # Phase 2: Check if final synthesis / report generation has started or finished
-                    has_reached_final_report = (
-                        "comprehensive report" in lower_text
-                        or "references" in lower_text
-                        or "faithfulness score:" in lower_text
-                        or "pipeline complete" in lower_text
-                    )
-
-                    # Determine stabilization threshold
-                    if has_reached_final_report:
-                        # Report is streaming or completed: 5 consecutive seconds of stability signals end of report
-                        stability_threshold = 5
-                    elif is_in_deep_research:
-                        # In the middle of search loops: grant up to 90 seconds of zero DOM updates without exiting early
-                        stability_threshold = 90
-                    else:
-                        # Standard fast chatbot: 7 seconds of silence
-                        stability_threshold = 7
-
-                    # Stabilization accounting
-                    if len(new_text.strip()) > len(before_text.strip()):
-                        if new_text.strip() == current_text.strip() and elapsed > 5:
+                    # 3. Stabilization accounting
+                    if len(new_text.strip()) > len(before_text.strip()) or is_error_state:
+                        if new_text.strip() == current_text.strip():
                             stable_cycles += 1
-                            if stable_cycles >= stability_threshold:
+                            if stable_cycles >= current_threshold:
                                 break
                         else:
                             current_text = new_text
@@ -362,6 +350,9 @@ class BrowserAdapter:
                 after = current_text if current_text else (await active_root.locator('body').inner_text())
                 last_text = after.strip()
                 transcript.append({'user': turn, 'agent': last_text[:8000]})
+                
+                if is_error_state:
+                    break
 
             await b.close()
 
